@@ -1,6 +1,7 @@
 import { Effect, Layer } from "effect"
 import { ProviderTag, type Provider, type ProviderResponse } from "./Provider.ts"
 import type { UserStory, Prd } from "./Prd.ts"
+import { TerminalUITag } from "./TerminalUI.ts"
 
 // -- Prompt ------------------------------------------------------------------
 
@@ -32,22 +33,26 @@ const parseJson = (s: string): unknown => {
   }
 }
 
-const logStreamEvent = (line: string): void => {
+const processStreamEvent = (line: string): Effect.Effect<void, never, TerminalUITag> => {
   const event = parseJson(line)
-  if (!isRecord(event)) return
+  if (!isRecord(event)) return Effect.void
 
   if (event.type === "assistant" && isRecord(event.message)) {
     const content = event.message.content
-    if (!Array.isArray(content)) return
-    for (const block of content) {
-      if (!isRecord(block)) continue
-      if (block.type === "text" && typeof block.text === "string") {
-        console.log(block.text)
+    if (!Array.isArray(content)) return Effect.void
+
+    return Effect.gen(function* () {
+      const ui = yield* TerminalUITag
+      for (const block of content) {
+        if (!isRecord(block)) continue
+        if (block.type === "text" && typeof block.text === "string") {
+          yield* ui.updateMessage(block.text)
+        }
+        if (block.type === "tool_use" && typeof block.name === "string") {
+          yield* ui.updateMessage(`▸ ${block.name}`)
+        }
       }
-      if (block.type === "tool_use" && typeof block.name === "string") {
-        console.log(`  ▸ ${block.name}`)
-      }
-    }
+    })
   }
 
   if (event.type === "result" && typeof event.duration_ms === "number") {
@@ -56,8 +61,13 @@ const logStreamEvent = (line: string): void => {
       typeof event.total_cost_usd === "number"
         ? ` · $${event.total_cost_usd.toFixed(4)}`
         : ""
-    console.log(`Done (${secs}s${cost})`)
+    return Effect.gen(function* () {
+      const ui = yield* TerminalUITag
+      yield* ui.updateMessage(`Done (${secs}s${cost})`)
+    })
   }
+
+  return Effect.void
 }
 
 // -- Process spawning --------------------------------------------------------
@@ -71,8 +81,11 @@ const claudeArgs = (prompt: string): ReadonlyArray<string> => [
   "--verbose",
 ]
 
-const spawnClaude = (prompt: string, quiet: boolean): Promise<string> =>
-  new Promise((resolve, reject) => {
+const spawnClaude = (
+  prompt: string,
+  quiet: boolean
+): Effect.Effect<string, never, TerminalUITag> =>
+  Effect.gen(function* () {
     const proc = Bun.spawn(["claude", ...claudeArgs(prompt)], {
       stdout: "pipe",
       stderr: quiet ? "pipe" : "inherit",
@@ -82,24 +95,23 @@ const spawnClaude = (prompt: string, quiet: boolean): Promise<string> =>
     const reader = proc.stdout.getReader()
     const decoder = new TextDecoder()
 
-    const read = (): void => {
-      reader.read().then(({ done, value }) => {
-        if (done) {
-          resolve(chunks.join(""))
-          return
-        }
-        const text = decoder.decode(value)
-        chunks.push(text)
-        if (!quiet) {
-          for (const line of text.split("\n")) {
-            if (line.trim()) logStreamEvent(line)
+    while (true) {
+      const result = yield* Effect.promise(() => reader.read())
+      if (result.done) break
+
+      const text = decoder.decode(result.value)
+      chunks.push(text)
+
+      if (!quiet) {
+        for (const line of text.split("\n")) {
+          if (line.trim()) {
+            yield* processStreamEvent(line)
           }
         }
-        read()
-      }, reject)
+      }
     }
 
-    read()
+    return chunks.join("")
   })
 
 // -- Response parsing --------------------------------------------------------
@@ -113,7 +125,7 @@ const parseResponse = (output: string): ProviderResponse => ({
 
 export const ClaudeProvider: Provider = {
   buildPrompt,
-  invoke: (prompt, quiet) => Effect.promise(() => spawnClaude(prompt, quiet)),
+  invoke: (prompt, quiet) => spawnClaude(prompt, quiet),
   parseResponse,
 }
 

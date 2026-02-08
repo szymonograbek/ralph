@@ -1,5 +1,6 @@
 import { Context, Effect, Schema } from "effect"
 import type { UserStory, Prd } from "./Prd.ts"
+import type { TerminalUITag } from "./TerminalUI.ts"
 
 // -- ProviderConfig ----------------------------------------------------------
 
@@ -23,7 +24,7 @@ export interface ProviderResponse {
 
 export interface Provider {
   readonly buildPrompt: (task: UserStory, prd: Prd) => string
-  readonly invoke: (prompt: string, quiet: boolean) => Effect.Effect<string>
+  readonly invoke: (prompt: string, quiet: boolean) => Effect.Effect<string, never, TerminalUITag>
   readonly parseResponse: (output: string) => ProviderResponse
 }
 
