@@ -14,7 +14,7 @@ const buildPrompt = (task: UserStory, prd: Prd): string =>
     "",
     task.notes ? `Notes from previous iterations:\n${task.notes}` : "",
     "",
-    "After completing the task, update PRD.json: set passes to true. Only update notes with important architectural decisions or difficulties encountered — leave notes empty if none.",
+    "After completing the task, update PRD.json: set passes to true. Update notes with anything useful for future iterations — implementation details, architectural decisions, context, dependencies, gotchas.",
   ].join("\n")
 
 export { buildPrompt }

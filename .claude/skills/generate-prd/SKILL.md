@@ -31,7 +31,7 @@ Creates properly structured PRD.json files for Ralph autonomous coding loops.
 }
 ```
 
-All fields required. `passes` always starts `false`. `notes` always starts `""` (populated by Claude during loop execution).
+All fields required. `passes` always starts `false`. `notes` always starts `""` (Claude updates during loop with implementation details, context, dependencies, gotchas).
 
 ## Workflow
 

@@ -1,4 +1,5 @@
 import { Args, Command, Options } from "@effect/cli"
+import { FileSystem, Path } from "@effect/platform"
 import { Console, Effect, Layer, Option } from "effect"
 import { RalphConfig, RalphConfigLive, ProviderLive, TerminalUILive, invokeClaudePlan, runLoop, linkSkills } from "@ralph/core"
 
@@ -30,6 +31,13 @@ const plan = Command.make("plan", { message }, ({ message }) =>
     yield* Effect.provide(
       Effect.gen(function* () {
         const cfg = yield* RalphConfig
+        const fs = yield* FileSystem.FileSystem
+        const pathService = yield* Path.Path
+        const prdPath = pathService.join(cfg.dir, "PRD.json")
+
+        // Remove existing PRD if present
+        yield* Effect.ignore(fs.remove(prdPath))
+
         yield* Console.log(`Planning in ${cfg.dir}...`)
         yield* invokeClaudePlan(message)
       }),
