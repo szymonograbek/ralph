@@ -1,0 +1,12 @@
+{
+  "name": "@ralph/core",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "effect": "^3",
+    "@effect/platform": "^0.77"
+  }
+}

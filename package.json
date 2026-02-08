@@ -1,0 +1,14 @@
+{
+  "name": "ralph-new",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "link": "bun link --cwd packages/cli"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}
