@@ -2,3 +2,4 @@ export { RalphConfig, RalphConfigSchema, RalphConfigLive, loadConfig } from "./C
 export { Prd, UserStory, readPrd, writePrd, findNextIncomplete, allPass } from "./Prd.ts"
 export { invokeClaude, invokeClaudePlan, buildPrompt } from "./Claude.ts"
 export { runLoop } from "./Loop.ts"
+export { linkSkills } from "./Skills.ts"

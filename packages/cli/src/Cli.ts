@@ -1,6 +1,6 @@
 import { Args, Command, Options } from "@effect/cli"
 import { Console, Effect, Option } from "effect"
-import { RalphConfig, RalphConfigLive, invokeClaudePlan, runLoop } from "@ralph/core"
+import { RalphConfig, RalphConfigLive, invokeClaudePlan, runLoop, linkSkills } from "@ralph/core"
 
 const dir = Options.text("dir").pipe(Options.optional)
 const config = Options.text("config").pipe(Options.optional)
@@ -42,7 +42,9 @@ const continueCmd = Command.make("continue", {}, () =>
   }),
 )
 
-export const command = ralph.pipe(Command.withSubcommands([plan, continueCmd]))
+const linkSkillsCmd = Command.make("link-skills", {}, () => linkSkills)
+
+export const command = ralph.pipe(Command.withSubcommands([plan, continueCmd, linkSkillsCmd]))
 
 export const cli = Command.run(command, {
   name: "ralph",
