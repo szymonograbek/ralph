@@ -100,10 +100,15 @@ const spawnClaude = (prompt: string, quiet: boolean): Promise<string> =>
 export const invokeClaude = (prompt: string, quiet: boolean) =>
   Effect.promise(() => spawnClaude(prompt, quiet))
 
-export const invokeClaudePlan = (message: string) => {
+export const invokeClaudePlan = (message: string, interactive: boolean, quiet: boolean) => {
   const prompt = `Use the generate-prd skill\n\n${message}`
-  const cmd = Command.make("claude", prompt)
-  return Command.exitCode(
-    cmd.pipe(Command.stdin("inherit"), Command.stdout("inherit"), Command.stderr("inherit")),
-  )
+
+  if (interactive) {
+    const cmd = Command.make("claude", prompt)
+    return Command.exitCode(
+      cmd.pipe(Command.stdin("inherit"), Command.stdout("inherit"), Command.stderr("inherit")),
+    )
+  }
+
+  return invokeClaude(prompt, quiet).pipe(Effect.as(0))
 }

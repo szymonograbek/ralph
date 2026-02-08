@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect"
+import { Duration, Effect, Fiber, Option, Schedule } from "effect"
 import { RalphConfig } from "./Config.ts"
 import { readPrd, findNextIncomplete, allPass } from "./Prd.ts"
 import { ProviderTag } from "./Provider.ts"
@@ -25,11 +25,18 @@ const iterate = (quiet: boolean) =>
 
     if (!quiet) {
       yield* ui.updateMessage(`Working on: ${task.title}`)
-      yield* ui.render()
     }
+
+    const spinnerFiber = !quiet
+      ? yield* Effect.fork(
+          ui.render().pipe(Effect.repeat(Schedule.spaced(Duration.millis(80))))
+        )
+      : undefined
 
     const prompt = provider.buildPrompt(task, prd)
     yield* provider.invoke(prompt, quiet)
+
+    if (spinnerFiber) yield* Fiber.interrupt(spinnerFiber)
 
     // Re-read PRD (provider may have updated it)
     const updatedPrd = yield* readPrd

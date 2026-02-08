@@ -24,9 +24,11 @@ const configFromParent = Effect.gen(function* () {
 })
 
 const message = Args.text({ name: "message" })
+const interactive = Options.boolean("interactive").pipe(Options.withAlias("i"))
 
-const plan = Command.make("plan", { message }, ({ message }) =>
+const plan = Command.make("plan", { message, interactive }, ({ message, interactive }) =>
   Effect.gen(function* () {
+    const parent = yield* ralph
     const layer = yield* configFromParent
     yield* Effect.provide(
       Effect.gen(function* () {
@@ -39,7 +41,10 @@ const plan = Command.make("plan", { message }, ({ message }) =>
         yield* Effect.ignore(fs.remove(prdPath))
 
         yield* Console.log(`Planning in ${cfg.dir}...`)
-        yield* invokeClaudePlan(message)
+        yield* invokeClaudePlan(message, interactive, parent.quiet)
+        if (!interactive) {
+          yield* Console.log("PRD generation complete")
+        }
       }),
       layer,
     )

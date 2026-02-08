@@ -86,6 +86,7 @@ const spawnClaude = (
   quiet: boolean
 ): Effect.Effect<string, never, TerminalUITag> =>
   Effect.gen(function* () {
+    const ui = yield* TerminalUITag
     const proc = Bun.spawn(["claude", ...claudeArgs(prompt)], {
       stdout: "pipe",
       stderr: quiet ? "pipe" : "inherit",
@@ -108,6 +109,7 @@ const spawnClaude = (
             yield* processStreamEvent(line)
           }
         }
+        yield* ui.render()
       }
     }
 
