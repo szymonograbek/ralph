@@ -1,11 +1,11 @@
 import { Console, Effect, Option } from "effect"
 import { RalphConfig } from "./Config.ts"
 import { readPrd, findNextIncomplete, allPass } from "./Prd.ts"
-import { buildPrompt, invokeClaude } from "./Claude.ts"
+import { ProviderTag } from "./Provider.ts"
 
 const iterate = (quiet: boolean) =>
   Effect.gen(function* () {
-    const config = yield* RalphConfig
+    const provider = yield* ProviderTag
     const prd = yield* readPrd
 
     const maybeTask = findNextIncomplete(prd)
@@ -23,15 +23,10 @@ const iterate = (quiet: boolean) =>
       yield* Console.log(`[${completed}/${total}] Working on: ${task.title}`)
     }
 
-    const prompt = buildPrompt(task, prd)
-    const output = yield* invokeClaude(prompt, quiet)
+    const prompt = provider.buildPrompt(task, prd)
+    yield* provider.invoke(prompt, quiet)
 
-    if (output.includes(config.completionMarker)) {
-      yield* Console.log("Completion marker found.")
-      return "complete" as const
-    }
-
-    // Re-read PRD (claude may have updated it)
+    // Re-read PRD (provider may have updated it)
     const updatedPrd = yield* readPrd
 
     if (allPass(updatedPrd)) {

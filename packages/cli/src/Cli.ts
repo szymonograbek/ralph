@@ -1,6 +1,6 @@
 import { Args, Command, Options } from "@effect/cli"
-import { Console, Effect, Option } from "effect"
-import { RalphConfig, RalphConfigLive, invokeClaudePlan, runLoop, linkSkills } from "@ralph/core"
+import { Console, Effect, Layer, Option } from "effect"
+import { RalphConfig, RalphConfigLive, ProviderLive, invokeClaudePlan, runLoop, linkSkills } from "@ralph/core"
 
 const dir = Options.text("dir").pipe(Options.optional)
 const config = Options.text("config").pipe(Options.optional)
@@ -12,10 +12,11 @@ const ralph = Command.make("ralph", { dir, config, quiet }, () =>
 
 const configFromParent = Effect.gen(function* () {
   const parent = yield* ralph
-  return RalphConfigLive({
+  const configLayer = RalphConfigLive({
     dir: Option.getOrUndefined(parent.dir),
     config: Option.getOrUndefined(parent.config),
   })
+  return Layer.merge(configLayer, Layer.provide(ProviderLive, configLayer))
 })
 
 const message = Args.text({ name: "message" })

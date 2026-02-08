@@ -1,6 +1,8 @@
-import { Command } from "@effect/platform"
-import { Effect } from "effect"
+import { Effect, Layer } from "effect"
+import { ProviderTag, type Provider, type ProviderResponse } from "./Provider.ts"
 import type { UserStory, Prd } from "./Prd.ts"
+
+// -- Prompt ------------------------------------------------------------------
 
 const buildPrompt = (task: UserStory, prd: Prd): string =>
   [
@@ -17,7 +19,7 @@ const buildPrompt = (task: UserStory, prd: Prd): string =>
     "After completing the task, update PRD.json: set passes to true. Only update notes with important architectural decisions or difficulties encountered — leave notes empty if none.",
   ].join("\n")
 
-export { buildPrompt }
+// -- Stream parsing ----------------------------------------------------------
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null
@@ -50,12 +52,15 @@ const logStreamEvent = (line: string): void => {
 
   if (event.type === "result" && typeof event.duration_ms === "number") {
     const secs = (event.duration_ms / 1000).toFixed(1)
-    const cost = typeof event.total_cost_usd === "number"
-      ? ` · $${event.total_cost_usd.toFixed(4)}`
-      : ""
+    const cost =
+      typeof event.total_cost_usd === "number"
+        ? ` · $${event.total_cost_usd.toFixed(4)}`
+        : ""
     console.log(`Done (${secs}s${cost})`)
   }
 }
+
+// -- Process spawning --------------------------------------------------------
 
 const claudeArgs = (prompt: string): ReadonlyArray<string> => [
   "-p",
@@ -97,13 +102,19 @@ const spawnClaude = (prompt: string, quiet: boolean): Promise<string> =>
     read()
   })
 
-export const invokeClaude = (prompt: string, quiet: boolean) =>
-  Effect.promise(() => spawnClaude(prompt, quiet))
+// -- Response parsing --------------------------------------------------------
 
-export const invokeClaudePlan = (message: string) => {
-  const prompt = `Use the generate-prd skill\n\n${message}`
-  const cmd = Command.make("claude", prompt)
-  return Command.exitCode(
-    cmd.pipe(Command.stdin("inherit"), Command.stdout("inherit"), Command.stderr("inherit")),
-  )
+const parseResponse = (output: string): ProviderResponse => ({
+  raw: output,
+  containsMarker: (marker: string) => output.includes(marker),
+})
+
+// -- Provider ----------------------------------------------------------------
+
+export const ClaudeProvider: Provider = {
+  buildPrompt,
+  invoke: (prompt, quiet) => Effect.promise(() => spawnClaude(prompt, quiet)),
+  parseResponse,
 }
+
+export const ClaudeProviderLive = Layer.succeed(ProviderTag, ClaudeProvider)
