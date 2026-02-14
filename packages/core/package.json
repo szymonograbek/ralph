@@ -8,6 +8,7 @@
   "dependencies": {
     "effect": "^3",
     "@effect/platform": "^0.77",
-    "@effect/platform-bun": "^0.57"
+    "@effect/platform-bun": "^0.57",
+    "better-sqlite3": "^11.8.1"
   }
 }
