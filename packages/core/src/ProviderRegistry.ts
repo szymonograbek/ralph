@@ -1,33 +1,31 @@
 import { Effect, Layer } from "effect"
-import { ProviderTag, type Provider } from "./Provider.ts"
-import { ClaudeProvider } from "./ClaudeProvider.ts"
-import { CodexProvider } from "./providers/CodexProvider.ts"
+import { ProviderTag } from "./Provider.ts"
+import { ClaudeProviderLive } from "./ClaudeProvider.ts"
+import { CodexProviderLive } from "./providers/CodexProvider.ts"
 import { RalphConfig } from "./Config.ts"
-
-// -- Registry ----------------------------------------------------------------
-
-export const ProviderRegistry: Record<string, Provider> = {
-  claude: ClaudeProvider,
-  codex: CodexProvider,
-}
+import type { TerminalUITag } from "./TerminalUI.ts"
 
 // -- Layer -------------------------------------------------------------------
 
-export const ProviderLive = Layer.effect(
-  ProviderTag,
+const providerLayers: Record<string, Layer.Layer<ProviderTag, never, TerminalUITag>> = {
+  claude: ClaudeProviderLive,
+  codex: CodexProviderLive,
+}
+
+export const ProviderLive = Layer.unwrapEffect(
   Effect.gen(function* () {
     const config = yield* RalphConfig
     const providerType = config.provider.type
 
-    const provider = ProviderRegistry[providerType]
-    if (!provider) {
+    const layer = providerLayers[providerType]
+    if (!layer) {
       return yield* Effect.fail(
         new Error(
-          `Unknown provider type: "${providerType}". Available: ${Object.keys(ProviderRegistry).join(", ")}`,
+          `Unknown provider type: "${providerType}". Available: ${Object.keys(providerLayers).join(", ")}`,
         ),
       )
     }
 
-    return provider
+    return layer
   }),
 )

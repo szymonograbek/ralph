@@ -31,6 +31,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@effect/platform": "^0.77",
+        "@effect/platform-bun": "^0.57",
         "effect": "^3",
       },
     },

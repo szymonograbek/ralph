@@ -4,7 +4,12 @@ import { readPrd, findNextIncomplete, allPass } from "./Prd.ts"
 import { ProviderTag } from "./Provider.ts"
 import { TerminalUITag } from "./TerminalUI.ts"
 
-const iterate = (quiet: boolean) =>
+export interface LoopHooks {
+  readonly onIterationStart: (taskTitle: string, completed: number, total: number) => Effect.Effect<void>
+  readonly onIterationEnd: (result: "continue" | "complete") => Effect.Effect<void>
+}
+
+const iterate = (quiet: boolean, hooks?: LoopHooks) =>
   Effect.gen(function* () {
     const provider = yield* ProviderTag
     const ui = yield* TerminalUITag
@@ -20,6 +25,10 @@ const iterate = (quiet: boolean) =>
     const task = maybeTask.value
     const completed = prd.userStories.filter((s) => s.passes).length
     const total = prd.userStories.length
+
+    if (hooks) {
+      yield* hooks.onIterationStart(task.title, completed, total)
+    }
 
     yield* ui.setTask(task.title, completed, total)
 
@@ -54,13 +63,18 @@ const iterate = (quiet: boolean) =>
     return "continue" as const
   })
 
-export const runLoop = (quiet: boolean) =>
+export const runLoop = (quiet: boolean, hooks?: LoopHooks) =>
   Effect.gen(function* () {
     const config = yield* RalphConfig
     const ui = yield* TerminalUITag
 
     for (let i = 0; i < config.maxIterations; i++) {
-      const result = yield* iterate(quiet)
+      const result = yield* iterate(quiet, hooks)
+
+      if (hooks) {
+        yield* hooks.onIterationEnd(result)
+      }
+
       if (result === "complete") {
         yield* ui.clear()
         return

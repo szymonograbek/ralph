@@ -1,5 +1,6 @@
 import { FileSystem, Path } from "@effect/platform"
 import { Context, Effect, Layer, Schema } from "effect"
+import { homeDir } from "./homeDir.ts"
 
 const ProviderConfigSchema = Schema.Struct({
   executable: Schema.optional(Schema.String),
@@ -18,6 +19,15 @@ export class RalphConfigSchema extends Schema.Class<RalphConfigSchema>("RalphCon
     }),
     { default: () => ({ type: "claude", config: {} }) },
   ),
+  /** Branches blocked from push command (prevents accidental pushes to main/master) */
+  protectedBranches: Schema.optionalWith(
+    Schema.Array(Schema.String),
+    { default: () => ["main", "master", "develop"] },
+  ),
+  /** Base directory for worktrees. Defaults to ~/.ralph/worktrees */
+  worktreeBasePath: Schema.optional(Schema.String),
+  /** Prefix for auto-generated branch names when PRD unavailable */
+  defaultBranchPrefix: Schema.optionalWith(Schema.String, { default: () => "ralph" }),
 }) {}
 
 export type RalphConfigInput = typeof RalphConfigSchema.Encoded
@@ -36,6 +46,9 @@ const readJsonSafe = (path: string) =>
     return JSON.parse(content) as Record<string, unknown>
   }).pipe(Effect.catchAll(() => Effect.succeed(emptyRecord)))
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v)
+
 const deepMerge = (
   base: Record<string, unknown>,
   override: Record<string, unknown>,
@@ -44,43 +57,25 @@ const deepMerge = (
   for (const key of Object.keys(override)) {
     const val = override[key]
     if (val !== undefined) {
-      // Deep merge for provider object to preserve nested config
-      if (
-        key === "provider" &&
-        typeof val === "object" &&
-        val !== null &&
-        typeof result[key] === "object" &&
-        result[key] !== null
-      ) {
-        const baseProvider = result[key] as Record<string, unknown>
-        const overrideProvider = val as Record<string, unknown>
-        result[key] = {
-          ...baseProvider,
-          ...overrideProvider,
-          // Deep merge provider.config
-          config:
-            overrideProvider.config !== undefined || baseProvider.config !== undefined
-              ? {
-                  ...(baseProvider.config as Record<string, unknown> | undefined),
-                  ...(overrideProvider.config as Record<string, unknown> | undefined),
-                }
-              : undefined,
-        }
-      } else {
-        result[key] = val
-      }
+      result[key] = isPlainObject(val) && isPlainObject(result[key])
+        ? deepMerge(result[key], val)
+        : val
     }
   }
   return result
 }
 
-/** Load config from 3 sources (ascending priority): package.json["ralph"] → ralph.json → <dir>/config.json */
+/** Load config from 4 sources (ascending priority): ~/.ralph/config.json → package.json["ralph"] → ralph.json → <dir>/config.json */
 export const loadConfig = (overrides: {
   readonly dir?: string
   readonly config?: string
 }) =>
   Effect.gen(function* () {
     const pathService = yield* Path.Path
+
+    // Source 0: ~/.ralph/config.json (global defaults)
+    const globalConfigPath = pathService.join(homeDir, ".ralph", "config.json")
+    const globalConfig = yield* readJsonSafe(globalConfigPath)
 
     // Source 1: package.json["ralph"]
     const pkg = yield* readJsonSafe("package.json")
@@ -90,8 +85,8 @@ export const loadConfig = (overrides: {
     const configPath = overrides.config ?? "ralph.json"
     const fileConfig = yield* readJsonSafe(configPath)
 
-    // Merge sources 1 + 2
-    let merged = deepMerge(pkgConfig, fileConfig)
+    // Merge sources 0 + 1 + 2
+    let merged = deepMerge(deepMerge(globalConfig, pkgConfig), fileConfig)
 
     // Determine dir from merged so far, then override
     const dir = overrides.dir ?? (merged["dir"] as string | undefined) ?? ".ralph"

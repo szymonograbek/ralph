@@ -1,17 +1,5 @@
-import { Context, Effect, Schema } from "effect"
+import { Context, Effect } from "effect"
 import type { UserStory, Prd } from "./Prd.ts"
-import type { TerminalUITag } from "./TerminalUI.ts"
-
-// -- ProviderConfig ----------------------------------------------------------
-
-export class ProviderConfig extends Schema.Class<ProviderConfig>("ProviderConfig")({
-  executable: Schema.String,
-  args: Schema.optionalWith(Schema.Array(Schema.String), { default: () => [] }),
-  env: Schema.optionalWith(
-    Schema.Record({ key: Schema.String, value: Schema.String }),
-    { default: () => ({}) },
-  ),
-}) {}
 
 // -- ProviderResponse --------------------------------------------------------
 
@@ -24,8 +12,9 @@ export interface ProviderResponse {
 
 export interface Provider {
   readonly buildPrompt: (task: UserStory, prd: Prd) => string
-  readonly invoke: (prompt: string, quiet: boolean) => Effect.Effect<string, never, TerminalUITag>
+  readonly invoke: (prompt: string, quiet: boolean) => Effect.Effect<string>
   readonly parseResponse: (output: string) => ProviderResponse
+  readonly invokePlan: (message: string, interactive: boolean, quiet: boolean) => Effect.Effect<number>
 }
 
 export class ProviderTag extends Context.Tag("Provider")<ProviderTag, Provider>() {}

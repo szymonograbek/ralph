@@ -17,12 +17,16 @@ const invoke = (_prompt: string, _quiet: boolean): Effect.Effect<string> =>
 const parseResponse = (_output: string): ProviderResponse =>
   notImplemented("parseResponse")
 
+const invokePlan = (_message: string, _interactive: boolean, _quiet: boolean): Effect.Effect<number> =>
+  Effect.die(new Error("CodexProvider.invokePlan not implemented"))
+
 // -- Provider ----------------------------------------------------------------
 
 export const CodexProvider: Provider = {
   buildPrompt,
   invoke,
   parseResponse,
+  invokePlan,
 }
 
 export const CodexProviderLive = Layer.succeed(ProviderTag, CodexProvider)

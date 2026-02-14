@@ -42,6 +42,10 @@ packages/
 
 **Loop termination**: 3 exit conditions — all stories pass, completion marker found, max iterations (default 50).
 
+## Testing
+
+After changes that affect CLI behavior or core logic, verify by running against this repo itself (e.g. `ralph plan "test"`, `ralph continue`). If a change is testable via terminal, test it.
+
 ## Anti-Patterns
 
 - Do NOT use Anthropic's Ralph plugin — degrades perf by keeping loops in same context window

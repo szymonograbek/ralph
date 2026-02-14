@@ -1,5 +1,6 @@
 import { FileSystem, Path } from "@effect/platform"
 import { Console, Effect } from "effect"
+import { homeDir } from "./homeDir.ts"
 
 const SKILLS_DIR = ".claude/skills"
 
@@ -7,10 +8,8 @@ const SKILLS_DIR = ".claude/skills"
 export const linkSkills = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const pathService = yield* Path.Path
-  const home = yield* Effect.sync(() => process.env.HOME ?? process.env.USERPROFILE ?? "~")
-
   const source = pathService.resolve(SKILLS_DIR)
-  const target = pathService.join(home, SKILLS_DIR)
+  const target = pathService.join(homeDir, SKILLS_DIR)
 
   const exists = yield* fs.exists(source)
   if (!exists) {

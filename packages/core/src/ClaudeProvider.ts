@@ -1,7 +1,9 @@
 import { Effect, Layer } from "effect"
 import { ProviderTag, type Provider, type ProviderResponse } from "./Provider.ts"
 import type { UserStory, Prd } from "./Prd.ts"
+import type { TerminalUI } from "./TerminalUI.ts"
 import { TerminalUITag } from "./TerminalUI.ts"
+import { prdSystemPrompt } from "./prompts/prd.ts"
 
 // -- Prompt ------------------------------------------------------------------
 
@@ -33,7 +35,7 @@ const parseJson = (s: string): unknown => {
   }
 }
 
-const processStreamEvent = (line: string): Effect.Effect<void, never, TerminalUITag> => {
+const processStreamEvent = (line: string, ui: TerminalUI): Effect.Effect<void> => {
   const event = parseJson(line)
   if (!isRecord(event)) return Effect.void
 
@@ -42,7 +44,6 @@ const processStreamEvent = (line: string): Effect.Effect<void, never, TerminalUI
     if (!Array.isArray(content)) return Effect.void
 
     return Effect.gen(function* () {
-      const ui = yield* TerminalUITag
       for (const block of content) {
         if (!isRecord(block)) continue
         if (block.type === "text" && typeof block.text === "string") {
@@ -61,10 +62,7 @@ const processStreamEvent = (line: string): Effect.Effect<void, never, TerminalUI
       typeof event.total_cost_usd === "number"
         ? ` · $${event.total_cost_usd.toFixed(4)}`
         : ""
-    return Effect.gen(function* () {
-      const ui = yield* TerminalUITag
-      yield* ui.updateMessage(`Done (${secs}s${cost})`)
-    })
+    return ui.updateMessage(`Done (${secs}s${cost})`)
   }
 
   return Effect.void
@@ -81,12 +79,8 @@ const claudeArgs = (prompt: string): ReadonlyArray<string> => [
   "--verbose",
 ]
 
-const spawnClaude = (
-  prompt: string,
-  quiet: boolean
-): Effect.Effect<string, never, TerminalUITag> =>
+const spawnClaude = (prompt: string, quiet: boolean, ui: TerminalUI): Effect.Effect<string> =>
   Effect.gen(function* () {
-    const ui = yield* TerminalUITag
     const proc = Bun.spawn(["claude", ...claudeArgs(prompt)], {
       stdout: "pipe",
       stderr: quiet ? "pipe" : "inherit",
@@ -106,7 +100,7 @@ const spawnClaude = (
       if (!quiet) {
         for (const line of text.split("\n")) {
           if (line.trim()) {
-            yield* processStreamEvent(line)
+            yield* processStreamEvent(line, ui)
           }
         }
         yield* ui.render()
@@ -116,6 +110,19 @@ const spawnClaude = (
     return chunks.join("")
   })
 
+const spawnClaudePlan = (prompt: string, quiet: boolean, interactive: boolean): Effect.Effect<number> =>
+  Effect.promise(() => {
+    const args = interactive
+      ? [prompt]
+      : ["-p", prompt, "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"]
+    const proc = Bun.spawn(["claude", ...args], {
+      stdout: interactive ? "inherit" : "pipe",
+      stderr: quiet && !interactive ? "pipe" : "inherit",
+      stdin: interactive ? "inherit" : undefined,
+    })
+    return proc.exited
+  })
+
 // -- Response parsing --------------------------------------------------------
 
 const parseResponse = (output: string): ProviderResponse => ({
@@ -123,12 +130,25 @@ const parseResponse = (output: string): ProviderResponse => ({
   containsMarker: (marker: string) => output.includes(marker),
 })
 
-// -- Provider ----------------------------------------------------------------
+// -- Provider factory (captures TerminalUI at construction) ------------------
 
-export const ClaudeProvider: Provider = {
+const makeClaudeProvider = (ui: TerminalUI): Provider => ({
   buildPrompt,
-  invoke: (prompt, quiet) => spawnClaude(prompt, quiet),
+  invoke: (prompt, quiet) => spawnClaude(prompt, quiet, ui),
   parseResponse,
-}
+  invokePlan: (message, interactive, quiet) => {
+    const prompt = interactive
+      ? `${prdSystemPrompt}\n\n---\n\nUser request:\n${message}`
+      : `${prdSystemPrompt}\n\nIMPORTANT: Do NOT ask clarifying questions. Use your best judgment and generate the PRD immediately.\n\n---\n\nUser request:\n${message}`
 
-export const ClaudeProviderLive = Layer.succeed(ProviderTag, ClaudeProvider)
+    return spawnClaudePlan(prompt, quiet, interactive)
+  },
+})
+
+export const ClaudeProviderLive = Layer.effect(
+  ProviderTag,
+  Effect.gen(function* () {
+    const ui = yield* TerminalUITag
+    return makeClaudeProvider(ui)
+  }),
+)
