@@ -8,6 +8,7 @@
     "link": "bun link --cwd packages/cli"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "latest",
     "typescript": "^5"
   }

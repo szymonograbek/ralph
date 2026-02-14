@@ -5,6 +5,7 @@ import { OrchestratorLive, ShutdownSignal } from "./Orchestrator.ts"
 import { OrchestratorServerLive } from "./Server.ts"
 import { socketPath, pidFilePath } from "./paths.ts"
 import { homeDir } from "../homeDir.ts"
+import { DatabaseLive } from "../Database.ts"
 
 // -- Socket/PID file helpers -------------------------------------------------
 
@@ -61,23 +62,37 @@ export const runDaemon = Effect.gen(function* () {
   const shutdownDeferred = yield* Deferred.make<void>()
   const shutdownLayer = Layer.succeed(ShutdownSignal, shutdownDeferred)
 
-  const serverLayer = BunHttpServer.layer({ unix: socketPath })
+  const unixSocketLayer = BunHttpServer.layer({ unix: socketPath })
+  const httpServerLayer = BunHttpServer.layer({ port: 3001 })
 
-  const orchestratorWithSignal = Layer.provide(OrchestratorLive, shutdownLayer)
+  const orchestratorWithDeps = Layer.provide(
+    OrchestratorLive,
+    Layer.merge(shutdownLayer, DatabaseLive),
+  )
 
-  const fullLayer = Layer.provideMerge(
+  // Unix socket server
+  const unixServerLayer = Layer.provideMerge(
     OrchestratorServerLive,
     Layer.merge(
-      Layer.merge(serverLayer, orchestratorWithSignal),
+      Layer.merge(unixSocketLayer, orchestratorWithDeps),
       BunContext.layer,
     ),
   )
 
-  // Build layer (starts server + orchestrator), then await shutdown signal
-  yield* Effect.acquireRelease(
-    Layer.build(fullLayer),
-    () => Effect.void,
+  // HTTP server
+  const httpServerFullLayer = Layer.provideMerge(
+    OrchestratorServerLive,
+    Layer.merge(
+      Layer.merge(httpServerLayer, orchestratorWithDeps),
+      BunContext.layer,
+    ),
   )
+
+  // Build both servers (starts both + orchestrator), then await shutdown signal
+  yield* Effect.all([
+    Effect.acquireRelease(Layer.build(unixServerLayer), () => Effect.void),
+    Effect.acquireRelease(Layer.build(httpServerFullLayer), () => Effect.void),
+  ])
 
   // Block until shutdown signal is completed
   yield* Deferred.await(shutdownDeferred)
